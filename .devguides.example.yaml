@@ -1,0 +1,76 @@
+# Example DevGuides Configuration File
+# Copy this to .devguides.yaml in your project root and customize as needed
+
+# CodeFlow MCP Server Configuration
+server:
+  # Command to start CodeFlow MCP server
+  command: "python"
+  # Arguments for the server command - point to the correct CodeFlow path
+  args: ["-m", "codeflowgraph.mcp_server"]
+  # Working directory for server (optional)
+  working_directory: "."
+  # Connection timeout in seconds
+  timeout: 30
+  # Environment variables for server
+  env:
+    PYTHONPATH: "../codeflowgraph"
+
+# LLM Configuration
+llm:
+  # LLM provider: "openai" or "local"
+  provider: "openai"
+  # Model to use
+  model: "gpt-4"
+  # OpenAI API key (can also be set via DEVGUIDES_LLM_API_KEY env var)
+  api_key: "your-openai-api-key-here"
+  # Custom OpenAI-compatible API base URL (optional)
+  base_url: null
+  # Maximum tokens for generation
+  max_tokens: 2000
+  # Generation temperature (0.0 to 2.0)
+  temperature: 0.3
+  # API request timeout
+  timeout: 60
+
+# Output Configuration
+output:
+  # Default output format: "markdown" or "html"
+  format: "markdown"
+  # Include Mermaid diagrams in output
+  include_diagrams: true
+  # Template to use: "default", "concise"
+  template: "default"
+  # Default output directory
+  output_directory: "./docs"
+  # File naming scheme: "query_based", "timestamped", "numbered"
+  file_naming: "query_based"
+  # Maximum file size in characters
+  max_file_size: 50000
+
+# Generation Configuration
+generation:
+  # Default detail level: "concise" or "comprehensive"
+  detail_level: "comprehensive"
+  # Include code examples in documentation
+  include_examples: true
+  # Maximum number of search results to analyze
+  max_results: 10
+  # Generation timeout in seconds
+  timeout: 60
+  # Number of retry attempts for failed operations
+  retry_attempts: 3
+  # Delay between retries in seconds
+  retry_delay: 1.0
+
+# Logging Configuration
+logging:
+  # Log level: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+  level: "INFO"
+  # Log format: "text" or "json"
+  format: "text"
+  # Log file path (optional)
+  file_path: null
+  # Maximum log file size in bytes
+  max_file_size: 10485760
+  # Number of backup log files to keep
+  backup_count: 5
