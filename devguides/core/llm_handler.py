@@ -211,6 +211,16 @@ Please generate {'comprehensive' if detail_level == 'comprehensive' else 'concis
 3. **Detailed Analysis** - Step-by-step explanation of how it works
 4. **Usage Examples** - Practical code examples showing how to use
 5. **Related Components** - Connections to other parts of the codebase
+"""
+        
+        # Add information about available Mermaid diagram
+        if context.get("has_mermaid_diagram"):
+            base_prompt += """
+
+NOTE: A Mermaid call flow diagram has been automatically generated and will be included in the final output. You can reference this diagram in your documentation (e.g., "See the call flow diagram below"). If you need to create additional diagrams for specific concepts, you may do so using Mermaid syntax in code blocks.
+"""
+        
+        base_prompt += """
 
 Focus on making this documentation useful for developers who need to understand or work with this code. Use technical but accessible language. Include relevant code snippets and explain the reasoning behind the implementation."""
 

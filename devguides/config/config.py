@@ -11,8 +11,8 @@ class ServerConfig(BaseModel):
     """Configuration for CodeFlow MCP server connection."""
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
-    command: str = Field(default="python")
-    args: List[str] = Field(default=["-m", "code_flow_graph.mcp_server"])
+    command: str = Field(default="code_flow_graph_mcp_server")
+    args: List[str] = Field(default=[])
     working_directory: Optional[str] = None
     timeout: int = 30
     env: Dict[str, str] = Field(default_factory=dict)
@@ -29,7 +29,7 @@ class LLMConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
     provider: str = Field(default="openai")
-    model: str = Field(default="gpt-5")
+    model: str = Field(default="gpt-4")
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     max_tokens: int = 2000
@@ -221,8 +221,11 @@ class DevGuidesConfig(BaseModel):
         if not self.server.command.strip():
             issues.append("Server command cannot be empty")
         
-        if not self.server.args:
-            issues.append("Server args cannot be empty")
+        # For console scripts, args can be empty
+        is_console_script = (self.server.command == "code_flow_graph_mcp_server" or
+                           "code_flow_graph_mcp_server" in self.server.command)
+        if not is_console_script and not self.server.args:
+            issues.append("Server args cannot be empty for non-console script commands")
         
         # Check LLM configuration
         if self.llm.provider == "openai":

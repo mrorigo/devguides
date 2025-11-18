@@ -4,7 +4,7 @@
 # CodeFlow MCP Server Configuration
 server:
   # Command to start CodeFlow MCP server
-  command: "python"
+  command: "/path/to/codeflowgraph/.venv/bin/code_flow_graph_mcp_server"
   # Arguments for the server command - point to the correct CodeFlow path
   args: ["-m", "codeflowgraph.mcp_server"]
   # Working directory for server (optional)
@@ -13,18 +13,16 @@ server:
   timeout: 30
   # Environment variables for server
   env:
-    PYTHONPATH: "../codeflowgraph"
+    PYTHONPATH: "/path/to/codeflowgraph"
 
 # LLM Configuration
 llm:
-  # LLM provider: "openai" or "local"
-  provider: "openai"
-  # Model to use
+  # Model to use (OpenAI models: gpt-4, gpt-4-turbo, gpt-3.5-turbo, etc.)
   model: "gpt-4"
   # OpenAI API key (can also be set via DEVGUIDES_LLM_API_KEY env var)
   api_key: "your-openai-api-key-here"
   # Custom OpenAI-compatible API base URL (optional)
-  base_url: null
+  base_url: http://localhost:11434/v1
   # Maximum tokens for generation
   max_tokens: 2000
   # Generation temperature (0.0 to 2.0)

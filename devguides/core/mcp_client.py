@@ -52,30 +52,9 @@ class CodeFlowMCPClient:
             logger.info("connecting_to_codeflow_mcp_server")
             
             # Get server config from config
-            server_command = self.config.get("command", "bash")
+            server_command = self.config.get("command", "code_flow_graph_mcp_server")
             server_args = self.config.get("args", [])
-            
-            # Handle run.sh script - use absolute path if provided
-            script_path = None
-            if server_command.endswith("run.sh"):
-                if os.path.isabs(server_command):
-                    # Use absolute path
-                    script_path = Path(server_command)
-                    working_dir = str(script_path.parent)
-                    logger.info("run_from_absolute_path",
-                               script_path=str(script_path),
-                               working_dir=working_dir,
-                               exists=script_path.exists())
-                else:
-                    # Use relative path from parent directory
-                    working_dir = "../codeflowgraph"
-                    script_path = Path(working_dir) / server_command
-                    logger.info("run_from_codeflowgraph_dir",
-                               working_dir=working_dir,
-                               script_path=str(script_path),
-                               exists=script_path.exists())
-            else:
-                working_dir = self.config.get("working_directory", ".")
+            working_dir = self.config.get("working_directory", ".")
             
             logger.info("server_config",
                        server_command=server_command,
@@ -83,45 +62,16 @@ class CodeFlowMCPClient:
                        working_dir=working_dir,
                        pythonpath=os.environ.get("PYTHONPATH", ""))
             
-            # For run.sh, we need to make sure it's executable
-            if server_command.endswith("run.sh"):
-                if script_path and script_path.exists():
-                    # Make sure script is executable
-                    os.chmod(script_path, 0o755)
-                    logger.info("made_run_sh_executable", path=str(script_path))
-                else:
-                    logger.error("run_sh_script_not_found", path=str(script_path) if script_path else "unknown")
-                    raise ConnectionError(f"run.sh script not found: {script_path}")
-            
-            # Set up environment properly
-            # For run.sh, we need a clean environment (no venv variables)
-            if server_command.endswith("run.sh"):
-                # Clean environment for run.sh - remove venv variables
-                env_vars = {}
-                # Only keep essential system variables
-                for key in ['PATH', 'HOME', 'SHELL', 'USER', 'LANG']:
-                    if key in os.environ:
-                        env_vars[key] = os.environ[key]
-                # Set PYTHONPATH to codeflowgraph only to avoid mcp.py shadowing
-                env_vars["PYTHONPATH"] = "."
-                # Ensure unbuffered output
-                env_vars["PYTHONUNBUFFERED"] = "1"
-                logger.info("clean_environment_for_run_sh",
-                           pythonpath=env_vars["PYTHONPATH"],
-                           working_dir=working_dir,
-                           venv_active=bool(os.environ.get("VIRTUAL_ENV")),
-                           unbuffered=env_vars["PYTHONUNBUFFERED"])
-            else:
-                # Standard environment for direct Python commands
-                env_vars = os.environ.copy()
-                pythonpath = env_vars.get("PYTHONPATH", "")
-                if "../codeflowgraph" not in pythonpath:
-                    env_vars["PYTHONPATH"] = f"../codeflowgraph:{pythonpath}"
-                env_vars["PYTHONUNBUFFERED"] = "1"
-                logger.info("standard_environment_setup",
-                           pythonpath=env_vars["PYTHONPATH"],
-                           cwd=working_dir,
-                           unbuffered=env_vars["PYTHONUNBUFFERED"])
+            # Set up environment for direct console script invocation
+            env_vars = os.environ.copy()
+            pythonpath = env_vars.get("PYTHONPATH", "")
+            if "../codeflowgraph" not in pythonpath:
+                env_vars["PYTHONPATH"] = f"../codeflowgraph:{pythonpath}"
+            env_vars["PYTHONUNBUFFERED"] = "1"
+            logger.info("direct_invocation_environment_setup",
+                       pythonpath=env_vars["PYTHONPATH"],
+                       cwd=working_dir,
+                       unbuffered=env_vars["PYTHONUNBUFFERED"])
             
             logger.info("connecting_to_mcp_server_via_stdio")
             
@@ -134,8 +84,13 @@ class CodeFlowMCPClient:
             
             # Use AsyncExitStack for proper resource management
             logger.info("stdio_client_connecting")
+            
+            # Suppress server stderr output (logs) by redirecting to devnull
+            # The server uses stdout for MCP protocol and stderr for logs
+            errlog = open(os.devnull, 'w')
+            
             stdio_transport = await exit_stack.enter_async_context(
-                stdio_client(server_params)
+                stdio_client(server_params, errlog=errlog)
             )
             
             read, write = stdio_transport

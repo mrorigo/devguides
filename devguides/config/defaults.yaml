@@ -2,8 +2,8 @@
 # This file can be overridden by user configuration files
 
 server:
-  command: "python"
-  args: ["-m", "codeflowgraph.mcp_server"]
+  command: "code_flow_graph_mcp_server"
+  args: []
   timeout: 30
   env:
     PYTHONPATH: "../codeflowgraph"

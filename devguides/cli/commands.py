@@ -15,7 +15,7 @@ from ..config.config import DevGuidesConfig
 from ..core.engine import DocumentationEngine, GenerationRequest
 from ..core.mcp_client import CodeFlowMCPClient
 from ..core.llm_handler import LLMHandler
-from ..utils.logging import setup_logging, get_logger
+from ..utils.logging import configure_for_cli, get_logger
 
 console = Console()
 logger = get_logger(__name__)
@@ -29,9 +29,25 @@ def cli(ctx, config, verbose, quiet):
     """DevGuides - AI-powered developer documentation generator."""
     ctx.ensure_object(dict)
     
-    # Set up logging
-    log_level = "DEBUG" if verbose else "ERROR" if quiet else "INFO"
-    setup_logging(level=log_level)
+    # Determine log file path (in user's home directory by default)
+    log_file = Path.home() / ".devguides" / "devguides.log"
+    
+    # Default behavior: Quiet console (INFO/DEBUG to file only), unless verbose is set
+    # If quiet flag is explicitly set, it suppresses even more (though our new setup handles this)
+    
+    # If verbose is set, show DEBUG on console.
+    # If quiet is set, show only CRITICAL on console.
+    # Default: Show INFO on console? No, user wants "clean" output.
+    # So Default should be: Console=WARNING/ERROR only, File=DEBUG
+    
+    is_quiet = not verbose # Default to quiet console unless verbose
+    if quiet:
+        is_quiet = True # Explicit quiet flag
+        
+    configure_for_cli(debug=verbose, quiet=is_quiet, log_file=log_file)
+    
+    if verbose:
+        logger.debug("logging_configured", verbose=verbose, quiet=quiet, log_file=str(log_file))
     
     # Load configuration
     try:
@@ -74,10 +90,12 @@ def generate(ctx, query, level, format, output, template, no_diagrams, max_resul
         try:
             console.print(f"[bold blue]Generating documentation for:[/bold blue] '{query_text}'")
             
-            # Initialize components
-            console.print(f"[dim]Server config: {config.server.model_dump()}[/dim]")
-            console.print(f"[dim]LLM config: {config.llm.model_dump()}[/dim]")
+            # Only show config in verbose mode (to avoid exposing API keys)
+            if ctx.parent.params.get('verbose', False):
+                console.print(f"[dim]Server config: {config.server.model_dump()}[/dim]")
+                console.print(f"[dim]LLM config: {config.llm.model_dump()}[/dim]")
             
+            # Initialize components
             mcp_client = CodeFlowMCPClient(config.server.model_dump())
             llm_handler = LLMHandler(config.llm.model_dump())
             engine = DocumentationEngine(mcp_client, llm_handler)

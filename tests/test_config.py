@@ -18,8 +18,8 @@ class TestServerConfig:
         """Test default server configuration values."""
         config = ServerConfig()
         
-        assert config.command == "python"
-        assert config.args == ["-m", "code_flow_graph.mcp_server"]
+        assert config.command == "code_flow_graph_mcp_server"
+        assert config.args == []
         assert config.working_directory is None
         assert config.timeout == 30
         assert config.env == {}
@@ -245,7 +245,7 @@ output:
         merged = config1.merge(config2)
         
         # config2 values should override config1
-        assert merged.server.command == "python"  # from config1
+        assert merged.server.command == "code_flow_graph_mcp_server"  # from config1
         assert merged.server.timeout == 60        # from config2
         assert merged.llm.provider == "openai"    # from config1
         assert merged.llm.model == "gpt-3.5-turbo" # from config2
@@ -287,7 +287,7 @@ output:
         # Valid configuration
         config = DevGuidesConfig(
             llm=LLMConfig(provider="local"),  # No API key needed for local
-            server=ServerConfig(command="python")
+            server=ServerConfig(command="python", args=["-m", "server"])
         )
         issues = config.validate_config()
         assert len(issues) == 0

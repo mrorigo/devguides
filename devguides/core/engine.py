@@ -57,13 +57,7 @@ class DocumentationEngine:
             
             # Step 2: Ensure MCP connection is established
             logger.info("establishing_mcp_connection")
-            try:
-                await self.mcp_client.connect(request.timeout)
-            except Exception as e:
-                logger.warning("mcp_connection_failed", error=str(e))
-                logger.info("falling_back_to_mock_mode")
-                # Continue with mock data - all MCP methods will use mock data
-                pass
+            await self.mcp_client.connect(request.timeout)
             
             # Step 3: Semantic search with CodeFlow (will use mock data if connection failed)
             search_results = await self.mcp_client.semantic_search(
@@ -92,13 +86,6 @@ class DocumentationEngine:
             if request.include_diagrams and fqns:
                 logger.info("generating_call_graph")
                 call_graph = await self.mcp_client.get_call_graph(fqns)
-                
-                if call_graph:
-                    logger.info("generating_mermaid_diagram")
-                    mermaid_diagram = await self.mcp_client.generate_mermaid_graph(
-                        fqns,
-                        llm_optimized=True
-                    )
             
             # Step 6: Get detailed metadata for key functions
             logger.info("fetching_function_metadata")
@@ -110,15 +97,34 @@ class DocumentationEngine:
                     metadata = await self.mcp_client.get_function_metadata(result["fqn"])
                     function_metadata.append(metadata)
             
-            # Step 7: Build context for LLM
-            context = self._build_context(
-                search_results,
-                call_graph,
-                function_metadata,
-                request
-            )
+            # Step 7: Generate Mermaid diagram BEFORE LLM generation
+            # This way the LLM knows what diagram will be included
+            mermaid_diagram = None
+            if request.include_diagrams and fqns:
+                try:
+                    logger.info("generating_mermaid_diagram")
+                    mermaid_diagram = await self.mcp_client.generate_mermaid_graph(
+                        fqns, 
+                        llm_optimized=True
+                    )
+                    logger.info("mermaid_diagram_generated", 
+                               diagram_length=len(mermaid_diagram) if mermaid_diagram else 0)
+                except Exception as e:
+                    logger.warning("mermaid_diagram_generation_failed", error=str(e))
+                    mermaid_diagram = None
             
-            # Step 8: Generate documentation with LLM
+            # Step 8: Build context for LLM (now includes diagram info)
+            context = {
+                "search_results": search_results,
+                "call_graph": call_graph,
+                "function_metadata": function_metadata,
+                "query": request.query,
+                "detail_level": request.detail_level,
+                "has_mermaid_diagram": bool(mermaid_diagram),
+                "mermaid_diagram_preview": mermaid_diagram[:200] + "..." if mermaid_diagram and len(mermaid_diagram) > 200 else mermaid_diagram
+            }
+            
+            # Step 9: Generate documentation with LLM
             logger.info("generating_llm_documentation")
             llm_content = await self.llm_handler.generate_documentation(
                 request.query,

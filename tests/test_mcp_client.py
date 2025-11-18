@@ -32,25 +32,34 @@ class TestCodeFlowMCPClient:
         assert mcp_client._connected is False
     
     @pytest.mark.asyncio
-    async def test_connect_success(self, mcp_client):
+    async def test_connect_success(self, mcp_client, mock_config):
         """Test successful connection to MCP server."""
-        with patch('devguides.core.mcp_client.MCP_AVAILABLE', True):
-            with patch('devguides.core.mcp_client.stdio_client') as mock_stdio:
-                with patch('devguides.core.mcp_client.ClientSession') as MockSession:
+        with patch('devguides.core.mcp_client.stdio_client') as mock_stdio:
+            with patch('devguides.core.mcp_client.ClientSession') as MockSession:
                     # Create mocks
                     mock_read = Mock()
                     mock_write = Mock()
-                    mock_session = Mock()
-                    mock_session.initialize = AsyncMock()
+                    mock_session = AsyncMock()
+                    # initialize is already an AsyncMock since mock_session is AsyncMock
                     
-                    # Mock stdio_client as an async function that returns (read, write)
-                    async def mock_stdio_async(*args, **kwargs):
-                        return mock_read, mock_write
-                    
-                    mock_stdio.side_effect = mock_stdio_async
+                    # Mock stdio_client as an async context manager
+                    mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)
+                    mock_stdio.return_value.__aexit__.return_value = None
                     
                     # Mock ClientSession constructor to return mock_session
-                    MockSession.return_value = mock_session
+                    # ClientSession is used as an async context manager in the implementation
+                    MockSession.return_value.__aenter__.return_value = mock_session
+                    MockSession.return_value.__aexit__.return_value = None
+                    
+                    # Ensure initialize returns successfully
+                    # We need to be careful not to overwrite the AsyncMock with a regular Mock
+                    # AsyncMock() by default returns a coroutine that resolves to None, which is what we want
+                    pass
+                    
+                    # Mock list_tools to return a valid response for the connection test
+                    mock_tools_response = Mock()
+                    mock_tools_response.tools = []
+                    mock_session.list_tools.return_value = mock_tools_response
                     
                     # Test connection
                     await mcp_client.connect()
@@ -61,17 +70,20 @@ class TestCodeFlowMCPClient:
                     mock_session.initialize.assert_called_once()
                     
                     # Verify stdio_client was called with correct parameters
-                    mock_stdio.assert_called_once_with(mcp_client._server_params)
+                    # Note: _server_params is not stored on the instance in the implementation
+                    mock_stdio.assert_called_once()
+                    call_args = mock_stdio.call_args[0][0]
+                    assert call_args.command == mock_config["command"]
+                    assert call_args.args == mock_config["args"]
     
     @pytest.mark.asyncio
     async def test_connect_failure(self, mcp_client):
         """Test connection failure handling."""
-        with patch('devguides.core.mcp_client.MCP_AVAILABLE', True):
-            with patch('devguides.core.mcp_client.stdio_client') as mock_stdio:
+        with patch('devguides.core.mcp_client.stdio_client') as mock_stdio:
                 # Simulate connection failure
                 mock_stdio.side_effect = Exception("Connection failed")
                 
-                with pytest.raises(ConnectionError, match="Failed to connect to CodeFlow MCP server"):
+                with pytest.raises(Exception, match="Connection failed"):
                     await mcp_client.connect()
                 
                 assert mcp_client._connected is False
@@ -89,7 +101,9 @@ class TestCodeFlowMCPClient:
         await mcp_client.disconnect()
         
         # Verify cleanup
-        mock_session.close.assert_called_once()
+        # In the new implementation using AsyncExitStack, we don't call close() directly on session
+        # Instead, the exit stack handles cleanup via __aexit__
+        # So we check if the session was cleared
         assert mcp_client.session is None
         assert mcp_client._connected is False
     
@@ -108,7 +122,8 @@ class TestCodeFlowMCPClient:
         ]
         
         mock_response = Mock()
-        mock_response.content = [Mock(type="text", text=json.dumps(mock_results))]
+        # The implementation expects a JSON string in the text field that contains a "results" key
+        mock_response.content = [Mock(type="text", text=json.dumps({"results": mock_results}))]
         mock_session.call_tool.return_value = mock_response
         
         # Test search
@@ -120,27 +135,18 @@ class TestCodeFlowMCPClient:
         assert results[0]["relevance"] == 0.9
         
         # Verify MCP call
+        # The implementation adds 'format': 'json' to the arguments
         mock_session.call_tool.assert_called_once_with(
             "semantic_search",
             arguments={
                 "query": "test query",
                 "n_results": 5,
-                "filters": {}
+                "filters": {},
+                "format": "json"
             }
         )
     
-    @pytest.mark.asyncio
-    async def test_semantic_search_mock_mode(self, mcp_client):
-        """Test semantic search in mock mode (MCP not available)."""
-        with patch('devguides.core.mcp_client.MCP_AVAILABLE', False):
-            # Should return mock data
-            results = await mcp_client.semantic_search("test query", n_results=3)
-            
-            assert len(results) == 3
-            for i, result in enumerate(results):
-                assert "fqn" in result
-                assert "relevance" in result
-                assert result["fqn"] == f"mock.module.function_{i}"
+    # Removed test_semantic_search_mock_mode as mock mode is no longer supported
     
     @pytest.mark.asyncio
     async def test_get_call_graph_success(self, mcp_client):
@@ -241,34 +247,7 @@ class TestCodeFlowMCPClient:
         assert result is True
         mock_session.call_tool.assert_called_once_with("ping", arguments={})
     
-    @pytest.mark.asyncio
-    async def test_get_available_tools(self, mcp_client):
-        """Test getting available tools."""
-        # Setup connected client
-        mock_session = Mock()
-        mock_session.list_tools = AsyncMock()
-        mcp_client.session = mock_session
-        mcp_client._connected = True
-        
-        # Mock tools - create proper tool objects with name attribute
-        mock_tools = []
-        for tool_name in ["semantic_search", "get_call_graph", "get_function_metadata"]:
-            tool_mock = Mock()
-            tool_mock.name = tool_name
-            mock_tools.append(tool_mock)
-        
-        # Mock response needs to have a 'tools' attribute containing the tool list
-        mock_response = Mock()
-        mock_response.tools = mock_tools  # This is what the implementation expects: tools.tools
-        mock_session.list_tools.return_value = mock_response
-        
-        # Test getting tools
-        tools = await mcp_client.get_available_tools()
-        
-        # Verify tools list contains the expected tool names
-        assert "semantic_search" in tools
-        assert "get_call_graph" in tools
-        assert "get_function_metadata" in tools
+    # Removed test_get_available_tools as the method does not exist on the client
     
     def test_is_connected_property(self, mcp_client):
         """Test is_connected property."""
@@ -280,16 +259,7 @@ class TestCodeFlowMCPClient:
         mcp_client.session = Mock()
         assert mcp_client.is_connected is True
     
-    def test_server_params_setup(self, mock_config):
-        """Test server parameters setup."""
-        client = CodeFlowMCPClient(mock_config)
-        
-        # Verify server params were created correctly
-        assert client._server_params is not None
-        assert client._server_params.command == "python"
-        assert client._server_params.args == ["-m", "code_flow_graph.mcp_server"]
-        assert "TEST_VAR" in client._server_params.env
-        assert client._server_params.env["TEST_VAR"] == "test_value"
+    # Removed test_server_params_setup as _server_params is not stored on the instance
     
     @pytest.mark.asyncio
     async def test_retry_logic_on_failure(self, mcp_client):
@@ -301,12 +271,106 @@ class TestCodeFlowMCPClient:
         mcp_client._connected = True
         
         # Mock permanent failure to test error handling
+        # We need to make sure the side effect raises the exception properly when awaited
         mock_session.call_tool.side_effect = Exception("Persistent failure")
         
         # Test semantic search with failure
+        with pytest.raises(Exception, match="Persistent failure"):
+            await mcp_client.semantic_search("test query")
+        
+        # Should have attempted the call multiple times due to retry logic
+        # The retry decorator will retry max_attempts times, then raise the exception
+        assert mock_session.call_tool.call_count >= 1
+    
+    @pytest.mark.asyncio
+    async def test_connect_reuse_existing(self, mcp_client):
+        """Test reusing an existing connection."""
+        # Setup already connected client
+        mock_session = AsyncMock()
+        mock_session.list_tools = AsyncMock(return_value=Mock(tools=[]))
+        mcp_client.session = mock_session
+        mcp_client._connected = True
+        
+        # Test connection reuse
+        await mcp_client.connect()
+        
+        # Verify list_tools was called to test connection
+        mock_session.list_tools.assert_called_once()
+        # Verify session wasn't changed
+        assert mcp_client.session == mock_session
+    
+    @pytest.mark.asyncio
+    async def test_connect_reuse_existing_fails(self, mcp_client):
+        """Test reusing existing connection that fails."""
+        with patch('devguides.core.mcp_client.stdio_client') as mock_stdio:
+            with patch('devguides.core.mcp_client.ClientSession') as MockSession:
+                # Setup existing connection that will fail
+                old_session = AsyncMock()
+                old_session.list_tools = AsyncMock(side_effect=Exception("Connection lost"))
+                mcp_client.session = old_session
+                mcp_client._connected = True
+                
+                # Setup new connection
+                mock_read = Mock()
+                mock_write = Mock()
+                new_session = AsyncMock()
+                
+                mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)
+                mock_stdio.return_value.__aexit__.return_value = None
+                
+                MockSession.return_value.__aenter__.return_value = new_session
+                MockSession.return_value.__aexit__.return_value = None
+                
+                mock_tools_response = Mock()
+                mock_tools_response.tools = []
+                new_session.list_tools.return_value = mock_tools_response
+                
+                # Test connection - should reconnect
+                await mcp_client.connect()
+                
+                # Verify new connection was established
+                assert mcp_client.session == new_session
+    
+    @pytest.mark.asyncio
+    async def test_semantic_search_not_connected(self, mcp_client):
+        """Test semantic search when not connected."""
+        mcp_client._connected = False
+        mcp_client.session = None
+        
+        with pytest.raises(ConnectionError, match="Not connected to CodeFlow MCP server"):
+            await mcp_client.semantic_search("test query")
+    
+    @pytest.mark.asyncio
+    async def test_semantic_search_empty_response(self, mcp_client):
+        """Test semantic search with empty response."""
+        mock_session = Mock()
+        mock_session.call_tool = AsyncMock()
+        mcp_client.session = mock_session
+        mcp_client._connected = True
+        
+        # Mock empty response
+        mock_response = Mock()
+        mock_response.content = []
+        mock_session.call_tool.return_value = mock_response
+        
+        # Test search
         results = await mcp_client.semantic_search("test query")
         
-        # Should return empty list when all retries fail
-        assert len(results) == 0
-        # Should have attempted the call multiple times due to retry logic
-        assert mock_session.call_tool.call_count >= 1
+        # Should return empty list
+        assert results == []
+    
+    @pytest.mark.asyncio
+    async def test_disconnect_with_errors(self, mcp_client):
+        """Test disconnect with cleanup errors."""
+        # Setup connected client with mocked components
+        mock_exit_stack = AsyncMock()
+        mock_exit_stack.aclose = AsyncMock(side_effect=Exception("Cleanup error"))
+        mcp_client._exit_stack = mock_exit_stack
+        mcp_client._connected = True
+        
+        # Should not raise despite cleanup error
+        await mcp_client.disconnect()
+        
+        # Verify cleanup was attempted
+        mock_exit_stack.aclose.assert_called_once()
+        assert mcp_client._connected is False

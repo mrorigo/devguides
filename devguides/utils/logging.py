@@ -9,7 +9,7 @@ import structlog
 from rich.logging import RichHandler
 from rich.console import Console
 
-def setup_logging(level: str = "INFO", log_file: Optional[Path] = None):
+def setup_logging(level: str = "INFO", log_file: Optional[Path] = None, quiet: bool = False):
     """Configure structured logging for DevGuides."""
     
     # Convert string level to logging constant
@@ -86,19 +86,38 @@ def setup_logging(level: str = "INFO", log_file: Optional[Path] = None):
         force=True
     )
     
-    # Set specific logger levels for known modules
+    # Set specific logger levels for noisy modules
+    # Suppress third-party libraries
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    
+    # Aggressively suppress MCP server logs unless in debug mode
+    if quiet or log_level > logging.DEBUG:
+        # Suppress all logs from the MCP server modules
+        logging.getLogger("__main__").setLevel(logging.ERROR)
+        logging.getLogger("analyzer").setLevel(logging.ERROR)
+        logging.getLogger("vector_store").setLevel(logging.ERROR)
+        logging.getLogger("call_graph_builder").setLevel(logging.ERROR)
+        logging.getLogger("python_extractor").setLevel(logging.ERROR)
+        logging.getLogger("server").setLevel(logging.ERROR)
 
 def get_logger(name: str) -> structlog.BoundLogger:
     """Get a structured logger instance."""
     return structlog.get_logger(name)
 
-def configure_for_cli(debug: bool = False):
-    """Configure logging for CLI usage."""
+def configure_for_cli(debug: bool = False, quiet: bool = False, log_file: Optional[Path] = None):
+    """Configure logging for CLI usage.
+    
+    Args:
+        debug: If True, show DEBUG level logs on console
+        quiet: If True, suppress console logging (except CRITICAL)
+        log_file: Path to log file for detailed logs
+    """
     level = "DEBUG" if debug else "INFO"
-    setup_logging(level=level)
+    setup_logging(level=level, log_file=log_file, quiet=quiet)
 
 def configure_for_testing():
     """Configure logging for testing."""

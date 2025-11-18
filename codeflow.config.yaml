@@ -1,0 +1,27 @@
+# CodeFlow Configuration for DevGuides Repository
+# This config tells CodeFlow to analyze the dev-guides codebase
+
+# Watch the dev-guides source code directory
+watch_directories: ["devguides"]
+
+# Common patterns to ignore
+ignored_patterns: [
+    "venv", 
+    "**/__pycache__", 
+    ".pytest_cache",
+    "code_vectors_chroma",
+    "docs/_build",
+    ".git"
+]
+
+# Store vector data in the dev-guides repository
+chromadb_path: "./code_vectors_chroma"
+
+# Graph analysis settings
+max_graph_depth: 3
+
+# Embedding model for semantic search
+embedding_model: "all-MiniLM-L6-v2"
+
+# Background cleanup configuration
+cleanup_interval_minutes: 30

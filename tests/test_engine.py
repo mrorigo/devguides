@@ -134,6 +134,9 @@ class TestDocumentationEngine:
         
         engine.llm_handler.generate_documentation = AsyncMock(return_value="Generated documentation content")
         
+        # Mock mcp_client.connect to be an async mock
+        engine.mcp_client.connect = AsyncMock()
+        
         # Execute generation
         result = await engine.generate(sample_request)
         
@@ -153,12 +156,14 @@ class TestDocumentationEngine:
         """Test generation when no search results found."""
         # Mock no search results
         engine.mcp_client.semantic_search = AsyncMock(return_value=[])
+        engine.mcp_client.connect = AsyncMock()
         
         # Execute generation
         result = await engine.generate(sample_request)
         
         # Verify failure result
         assert result.success is False
+        assert result.content == ""
         assert result.content == ""
         assert "No relevant code found" in result.error_message
     
@@ -184,6 +189,7 @@ class TestDocumentationEngine:
         engine.mcp_client.semantic_search = AsyncMock(return_value=[
             {"fqn": "auth.login", "relevance": 0.9}
         ])
+        engine.mcp_client.connect = AsyncMock()
         
         engine.mcp_client.get_function_metadata = AsyncMock(return_value={
             "fqn": "auth.login",
@@ -213,6 +219,7 @@ class TestDocumentationEngine:
         engine.mcp_client.semantic_search = AsyncMock(return_value=[
             {"fqn": "test.func", "relevance": 0.9}
         ])
+        engine.mcp_client.connect = AsyncMock()
         
         engine.mcp_client.get_call_graph = AsyncMock(return_value={})
         
@@ -385,12 +392,14 @@ class TestDocumentationEngine:
         """Test error handling during generation."""
         # Mock operations that raise exceptions
         engine.mcp_client.semantic_search = AsyncMock(side_effect=Exception("MCP error"))
+        engine.mcp_client.connect = AsyncMock()
         
         # Execute generation
         result = await engine.generate(sample_request)
         
         # Verify error handling
         assert result.success is False
+        assert result.content == ""
         assert result.content == ""
         assert "MCP error" in result.error_message
         assert result.execution_time > 0
