@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field, field_validator
 from pydantic.config import ConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class ServerConfig(BaseModel):
     """Configuration for CodeFlow MCP server connection."""
@@ -129,9 +130,15 @@ class LoggingConfig(BaseModel):
             raise ValueError(f'format must be one of: {allowed_formats}')
         return v
 
-class DevGuidesConfig(BaseModel):
+class DevGuidesConfig(BaseSettings):
     """Main configuration class for DevGuides."""
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = SettingsConfigDict(
+        env_prefix='DEVGUIDES_',
+        env_nested_delimiter='__',
+        case_sensitive=False,
+        arbitrary_types_allowed=True,
+        extra='ignore'
+    )
     
     server: ServerConfig = Field(default_factory=ServerConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
@@ -144,47 +151,14 @@ class DevGuidesConfig(BaseModel):
         """Load configuration from YAML file."""
         with open(config_path, 'r') as f:
             config_dict = yaml.safe_load(f)
+        # Pydantic settings will automatically merge with env vars if we initialize with dict
         return cls(**config_dict)
     
     @classmethod
     def from_env(cls) -> "DevGuidesConfig":
         """Load configuration from environment variables."""
-        config_dict = {}
-        
-        # Server config
-        if server_cmd := os.getenv("DEVGUIDES_SERVER_COMMAND"):
-            config_dict.setdefault("server", {})["command"] = server_cmd
-        if server_timeout := os.getenv("DEVGUIDES_SERVER_TIMEOUT"):
-            try:
-                config_dict.setdefault("server", {})["timeout"] = int(server_timeout)
-            except ValueError:
-                pass  # Skip invalid timeout values
-        
-        # LLM config
-        if llm_key := os.getenv("DEVGUIDES_LLM_API_KEY"):
-            config_dict.setdefault("llm", {})["api_key"] = llm_key
-        if llm_model := os.getenv("DEVGUIDES_LLM_MODEL"):
-            config_dict.setdefault("llm", {})["model"] = llm_model
-        if llm_base_url := os.getenv("DEVGUIDES_LLM_BASE_URL"):
-            config_dict.setdefault("llm", {})["base_url"] = llm_base_url
-        if llm_provider := os.getenv("DEVGUIDES_LLM_PROVIDER"):
-            config_dict.setdefault("llm", {})["provider"] = llm_provider
-        
-        # Output config
-        if output_dir := os.getenv("DEVGUIDES_OUTPUT_DIRECTORY"):
-            config_dict.setdefault("output", {})["output_directory"] = output_dir
-        if output_format := os.getenv("DEVGUIDES_OUTPUT_FORMAT"):
-            config_dict.setdefault("output", {})["format"] = output_format
-        
-        # Generation config
-        if detail_level := os.getenv("DEVGUIDES_DETAIL_LEVEL"):
-            config_dict.setdefault("generation", {})["detail_level"] = detail_level
-        
-        # Logging config
-        if log_level := os.getenv("DEVGUIDES_LOG_LEVEL"):
-            config_dict.setdefault("logging", {})["level"] = log_level
-        
-        return cls(**config_dict)
+        # pydantic-settings handles this automatically
+        return cls()
     
     def merge(self, other: "DevGuidesConfig") -> "DevGuidesConfig":
         """Merge with another configuration (for CLI override)."""

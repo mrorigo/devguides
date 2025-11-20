@@ -92,28 +92,7 @@ class OpenAIProvider(LLMProvider):
             logger.error("openai_request_failed", error=str(e))
             raise
 
-class LocalLLMProvider(LLMProvider):
-    """Local LLM provider placeholder for future implementation."""
-    
-    def __init__(self, model_name: str = "llama2"):
-        """Initialize local LLM provider."""
-        self.model_name = model_name
-        logger.info("local_llm_provider_initialized", model=model_name)
-    
-    def is_available(self) -> bool:
-        """Check if local LLM provider is available."""
-        # TODO: Implement actual local LLM availability check
-        # This would check for Ollama, HuggingFace models, etc.
-        return False
-    
-    async def generate(self, prompt: str, max_tokens: int = 2000, temperature: float = 0.3) -> str:
-        """Generate text using local LLM."""
-        if not self.is_available():
-            raise RuntimeError("Local LLM provider not available")
-        
-        # TODO: Implement actual local LLM integration
-        # This would use Ollama, HuggingFace, or other local model APIs
-        raise NotImplementedError("Local LLM provider not yet implemented")
+
 
 class LLMHandler:
     """Main LLM handler that manages different providers."""
@@ -151,11 +130,6 @@ class LLMHandler:
                 api_key=api_key or "dummy",  # Use dummy key if none provided for local services
                 model=self.config.get("model", "gpt-4"),
                 base_url=base_url
-            )
-        
-        elif provider_type == "local":
-            return LocalLLMProvider(
-                model_name=self.config.get("model_name", "llama2")
             )
         
         else:
@@ -248,41 +222,7 @@ Keep the response brief but informative."""
 
         return base_prompt
     
-    async def generate_summary(self, code_context: str, max_length: int = 500) -> str:
-        """Generate a brief summary of code context."""
-        
-        prompt = f"""Provide a brief summary (max {max_length} characters) of the following code:
 
-{code_context}
-
-Summary:"""
-        
-        try:
-            response = await self.provider.generate(prompt, max_length, temperature=0.3)
-            return response.strip()
-        except Exception as e:
-            logger.error("summary_generation_failed", error=str(e))
-            return f"Error generating summary: {str(e)}"
-    
-    async def explain_code_snippet(self, code_snippet: str, context: str = "") -> str:
-        """Explain a specific code snippet."""
-        
-        prompt = f"""Explain the following code snippet:
-
-```python
-{code_snippet}
-```
-
-Context: {context}
-
-Provide a clear explanation of what this code does, including any important patterns or considerations."""
-        
-        try:
-            response = await self.provider.generate(prompt, max_tokens=1000, temperature=0.3)
-            return response.strip()
-        except Exception as e:
-            logger.error("code_explanation_failed", error=str(e))
-            return f"Error explaining code: {str(e)}"
     
     @property
     def provider_available(self) -> bool:
