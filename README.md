@@ -620,7 +620,50 @@ uv run mypy devguides/
 - **💡 Enhancements**: Contribute templates, LLM providers, integrations
 - **📖 Documentation**: Improve guides, examples, and tutorials
 
-## 📄 License
+## � Recently Completed
+
+### v0.3.0 - Context Expansion & Grounding (Nov 2024)
+- ✅ **File Content Expansion**: `--max-files` parameter to include ±100 lines around search results
+- ✅ **AGENTS.md Support**: Automatic project context injection from AGENTS.md or README.md
+- ✅ **Strict Grounding**: Anti-hallucination instructions in LLM prompts
+- ✅ **Diagram Generation Fix**: Corrected FQN extraction for Mermaid diagrams
+- ✅ **Mermaid Formatting**: Fixed JSON parsing and duplicate header removal
+- ✅ **Improved Documentation**: Clearer configuration examples with links to actual files
+
+### v0.2.0 - Template & Configuration Modernization (Nov 2024)
+- ✅ **Jinja2 Templates**: Replaced custom templates with industry-standard Jinja2
+- ✅ **Pydantic Settings**: Enhanced configuration with automatic env var loading
+- ✅ **Improved Flexibility**: Better template customization and maintainability
+
+### v0.1.0 - Initial Release (Nov 2024)
+- ✅ **CodeFlow Integration**: Production-ready MCP client with stdio transport
+- ✅ **Async Architecture**: Proper async context managers for resource management
+- ✅ **Core Features**: Semantic search, call graphs, LLM documentation generation
+
+## 🗺️ Roadmap
+
+### Short Term (Next Release)
+- [ ] **Multi-LLM Support**: Add support for Anthropic Claude, local models (Ollama)
+- [ ] **Streaming Output**: Real-time documentation generation with progress updates
+- [ ] **Custom Templates**: Template gallery and easier template creation
+- [ ] **Batch Generation**: Generate documentation for multiple queries in one run
+
+### Medium Term
+- [ ] **Interactive Mode**: REPL-style interface for iterative documentation refinement
+- [ ] **Documentation Versioning**: Track documentation changes over time
+- [ ] **Code Change Detection**: Auto-regenerate docs when code changes
+- [ ] **Multi-Language Support**: Extend beyond Python to JavaScript, TypeScript, Go, Rust
+
+### Long Term
+- [ ] **Documentation Testing**: Verify documentation accuracy against actual code
+- [ ] **Integration Plugins**: VS Code, JetBrains, Vim/Neovim extensions
+- [ ] **Collaborative Features**: Team documentation workflows and review processes
+- [ ] **AI-Powered Suggestions**: Recommend what to document based on code complexity
+
+**Want to contribute?** Check out our [Contributing](#-contributing) section or open an issue to discuss new features!
+
+
+## �📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
