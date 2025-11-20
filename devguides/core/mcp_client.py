@@ -112,7 +112,7 @@ class CodeFlowMCPClient:
             logger.info("attempting_mcp_session_initialization")
             max_attempts = 2
             for attempt in range(max_attempts):
-                attempt_timeout = (attempt + 1) * 30.0  # 30s, 60s
+                attempt_timeout = (attempt + 1) * 600.0  #5min, 10min etc
                 try:
                     logger.info("session_initialization_attempt", attempt=attempt + 1, timeout=attempt_timeout)
                     
@@ -327,9 +327,45 @@ class CodeFlowMCPClient:
             )
             
             if result.content and result.content[0].type == "text":
-                mermaid_code = result.content[0].text
-                logger.info("generate_mermaid_graph_completed")
-                return mermaid_code
+                response_text = result.content[0].text
+                
+                # Try to parse as JSON first (server may return {"graph": "...", "analysis_status": "..."})
+                try:
+                    parsed = json.loads(response_text)
+                    if isinstance(parsed, dict) and "graph" in parsed:
+                        mermaid_code = parsed["graph"]
+                        logger.info("generate_mermaid_graph_completed", parsed_from_json=True)
+                        
+                        # Clean up duplicate "graph TD" declarations (CodeFlow bug workaround)
+                        lines = mermaid_code.split('\n')
+                        if len(lines) > 1 and lines[0].strip() == "graph TD" and lines[1].strip() == "graph TD":
+                            # Remove the duplicate
+                            mermaid_code = '\n'.join(lines[1:])
+                            logger.info("removed_duplicate_graph_declaration")
+                        
+                        # Remove leading whitespace from all lines (CodeFlow formatting issue)
+                        lines = mermaid_code.split('\n')
+                        # Find minimum indentation (excluding empty lines)
+                        min_indent = float('inf')
+                        for line in lines:
+                            if line.strip():
+                                indent = len(line) - len(line.lstrip())
+                                min_indent = min(min_indent, indent)
+                        
+                        # Remove the minimum indentation from all lines
+                        if min_indent > 0 and min_indent != float('inf'):
+                            lines = [line[min_indent:] if len(line) > min_indent else line for line in lines]
+                            mermaid_code = '\n'.join(lines)
+                            logger.info("removed_leading_whitespace", min_indent=min_indent)
+                        
+                        return mermaid_code
+                except json.JSONDecodeError:
+                    # Not JSON, assume it's plain Mermaid code
+                    pass
+                
+                # Return as-is if not JSON
+                logger.info("generate_mermaid_graph_completed", parsed_from_json=False)
+                return response_text
             else:
                 logger.warning("generate_mermaid_graph_empty_response")
                 return ""

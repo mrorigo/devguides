@@ -4,6 +4,8 @@ import asyncio
 from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass
 import time
+import os
+from pathlib import Path
 
 from ..utils.logging import get_logger
 from .mcp_client import CodeFlowMCPClient
@@ -19,6 +21,7 @@ class GenerationRequest:
     output_format: str = "markdown"
     include_diagrams: bool = True
     max_results: int = 10
+    max_files: int = 5
     template: str = "default"
     timeout: int = 60
     
@@ -76,8 +79,22 @@ class DocumentationEngine:
             
             logger.info("search_completed", results_count=len(search_results))
             
+            # DEBUG: Log search results structure to verify FQN presence
+            if search_results:
+                logger.info("search_results_sample", 
+                           first_result_keys=list(search_results[0].keys()) if search_results else [],
+                           first_result_metadata_keys=list(search_results[0].get("metadata", {}).keys()) if search_results else [])
+            
             # Step 4: Extract function FQNs for call graph analysis
-            fqns = [result.get("fqn") for result in search_results if result.get("fqn") and isinstance(result.get("fqn"), str)]
+            # FQNs are in metadata.fully_qualified_name, not at top level
+            fqns = []
+            for result in search_results:
+                metadata = result.get("metadata", {})
+                fqn = metadata.get("fully_qualified_name")
+                if fqn and isinstance(fqn, str):
+                    fqns.append(fqn)
+            
+            logger.info("fqns_extracted", count=len(fqns), fqns=fqns)
             
             # Step 5: Get call graph if requested and we have FQNs
             call_graph = {}
@@ -113,7 +130,11 @@ class DocumentationEngine:
                     logger.warning("mermaid_diagram_generation_failed", error=str(e))
                     mermaid_diagram = None
             
-            # Step 8: Build context for LLM (now includes diagram info)
+            # Step 7.5: Expand search results with file content
+            logger.info("expanding_search_results_with_file_content")
+            expanded_files = self._expand_search_results(search_results, request.max_files)
+            
+            # Step 8: Build context for LLM (now includes diagram info and expanded files)
             context = {
                 "search_results": search_results,
                 "call_graph": call_graph,
@@ -121,7 +142,8 @@ class DocumentationEngine:
                 "query": request.query,
                 "detail_level": request.detail_level,
                 "has_mermaid_diagram": bool(mermaid_diagram),
-                "mermaid_diagram_preview": mermaid_diagram[:200] + "..." if mermaid_diagram and len(mermaid_diagram) > 200 else mermaid_diagram
+                "mermaid_diagram_preview": mermaid_diagram[:200] + "..." if mermaid_diagram and len(mermaid_diagram) > 200 else mermaid_diagram,
+                "expanded_files": expanded_files
             }
             
             # Step 9: Generate documentation with LLM
@@ -138,7 +160,10 @@ class DocumentationEngine:
                 mermaid_diagram,
                 request.template,
                 request.detail_level,
-                request.output_format
+                request.output_format,
+                query=request.query,
+                search_results_count=len(search_results),
+                functions_analyzed=len(fqns)
             )
             
             # Step 10: Create result
@@ -222,10 +247,125 @@ class DocumentationEngine:
                 "functions_with_metadata": len(function_metadata),
                 "has_call_graph": bool(call_graph),
                 "has_mermaid_diagram": bool(call_graph and request.include_diagrams)
-            }
+            },
+            "project_context": self._get_project_context()
         }
         
         return context
+    
+    def _get_project_context(self) -> str:
+        """Get project context from AGENTS.md or README.md."""
+        try:
+            # Check for AGENTS.md first
+            agents_path = Path("AGENTS.md")
+            if agents_path.exists() and agents_path.is_file():
+                logger.info("using_agents_md_context")
+                return agents_path.read_text(encoding="utf-8")
+            
+            # Fallback to README.md
+            readme_path = Path("README.md")
+            if readme_path.exists() and readme_path.is_file():
+                logger.info("using_readme_md_context")
+                return readme_path.read_text(encoding="utf-8")
+            
+            logger.info("no_project_context_found")
+            return ""
+            
+        except Exception as e:
+            logger.warning("failed_to_read_project_context", error=str(e))
+            return ""
+    
+    def _expand_search_results(self, search_results: List[Dict], max_files: int) -> Dict[str, str]:
+        """Expand search results with surrounding file content.
+        
+        Args:
+            search_results: List of search results from MCP
+            max_files: Maximum number of files to expand
+            
+        Returns:
+            Dictionary mapping filename to expanded content
+        """
+        from collections import defaultdict
+        
+        # Group results by file
+        file_ranges = defaultdict(list)
+        for result in search_results:
+            filename = result.get("filename")
+            line_number = result.get("line_number")
+            
+            if filename and line_number is not None:
+                file_ranges[filename].append(line_number)
+        
+        # Limit to max_files
+        files_to_expand = list(file_ranges.keys())[:max_files]
+        expanded_files = {}
+        
+        for filename in files_to_expand:
+            try:
+                file_path = Path(filename)
+                if not file_path.exists():
+                    logger.warning("file_not_found", filename=filename)
+                    continue
+                
+                # Read entire file
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                
+                total_lines = len(lines)
+                line_numbers = file_ranges[filename]
+                
+                # Calculate ranges (100 lines before and after each match)
+                ranges = []
+                for line_num in line_numbers:
+                    start = max(0, line_num - 100)
+                    end = min(total_lines, line_num + 100)
+                    ranges.append((start, end))
+                
+                # Merge overlapping ranges
+                merged_ranges = self._merge_ranges(ranges)
+                
+                # Build content with line numbers
+                content_parts = []
+                for start, end in merged_ranges:
+                    content_parts.append(f"[Lines {start+1}-{end}]")
+                    content_parts.append(''.join(lines[start:end]))
+                
+                expanded_files[filename] = '\n'.join(content_parts)
+                logger.info("file_expanded", filename=filename, ranges=len(merged_ranges))
+                
+            except Exception as e:
+                logger.warning("failed_to_expand_file", filename=filename, error=str(e))
+        
+        return expanded_files
+    
+    def _merge_ranges(self, ranges: List[tuple]) -> List[tuple]:
+        """Merge overlapping or adjacent ranges.
+        
+        Args:
+            ranges: List of (start, end) tuples
+            
+        Returns:
+            List of merged (start, end) tuples
+        """
+        if not ranges:
+            return []
+        
+        # Sort by start position
+        sorted_ranges = sorted(ranges)
+        merged = [sorted_ranges[0]]
+        
+        for current_start, current_end in sorted_ranges[1:]:
+            last_start, last_end = merged[-1]
+            
+            # Check if ranges overlap or are adjacent
+            if current_start <= last_end:
+                # Merge by extending the end
+                merged[-1] = (last_start, max(last_end, current_end))
+            else:
+                # No overlap, add as new range
+                merged.append((current_start, current_end))
+        
+        return merged
     
     def _apply_template(
         self, 
@@ -233,7 +373,10 @@ class DocumentationEngine:
         mermaid_diagram: Optional[str], 
         template: str,
         detail_level: str,
-        output_format: str
+        output_format: str,
+        query: str,
+        search_results_count: int,
+        functions_analyzed: int
     ) -> str:
         """Apply template formatting to generated content using Jinja2."""
         
@@ -250,10 +393,10 @@ class DocumentationEngine:
         # Prepare template context
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         metadata = {
-            "query": "Query not available in this context", # TODO: Pass query through
+            "query": query,
             "detail_level": detail_level,
-            "functions_analyzed": "N/A", # TODO: Pass metadata through
-            "search_results_count": "N/A"
+            "functions_analyzed": functions_analyzed,
+            "search_results_count": search_results_count
         }
         
         # Initialize Jinja2 environment

@@ -216,11 +216,11 @@ output:
     def test_from_env(self):
         """Test loading configuration from environment variables."""
         with patch.dict(os.environ, {
-            "DEVGUIDES_SERVER_COMMAND": "python3.11",
-            "DEVGUIDES_SERVER_TIMEOUT": "60",
-            "DEVGUIDES_LLM_API_KEY": "env-api-key",
-            "DEVGUIDES_LLM_MODEL": "gpt-4-turbo",
-            "DEVGUIDES_OUTPUT_DIRECTORY": "./env-docs"
+            "DEVGUIDES_SERVER__COMMAND": "python3.11",
+            "DEVGUIDES_SERVER__TIMEOUT": "60",
+            "DEVGUIDES_LLM__API_KEY": "env-api-key",
+            "DEVGUIDES_LLM__MODEL": "gpt-4-turbo",
+            "DEVGUIDES_OUTPUT__OUTPUT_DIRECTORY": "./env-docs"
         }):
             config = DevGuidesConfig.from_env()
             

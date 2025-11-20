@@ -11,16 +11,21 @@
 
 DevGuides is a powerful CLI tool that generates intelligent, context-aware developer documentation by combining **CodeFlow's** semantic code analysis with **LLM-powered** synthesis. It transforms complex codebases into clear, actionable guides that help developers understand, navigate, and contribute to any codebase more efficiently.
 
-Built on the same open foundation that powers leading AI development tools, DevGuides delivers **complete transparency, unlimited extensibility, and community-driven development** - putting you in control of your codebase understanding workflow.
+**⚠️ Basic Requirement**: DevGuides requires **CodeFlow MCP server** to be installed and configured. CodeFlow must be installed from GitHub as it hasn't been published to PyPI yet.
 
 ### ✨ Key Features
 
-- **🧠 Intelligent Analysis**: Uses semantic search to understand code relationships
+- **🧠 Intelligent Analysis**: Uses CodeFlow's semantic search to understand code relationships
 - **🎯 Natural Language Queries**: Ask questions like "Explain user authentication flow"
-- **📊 Visual Diagrams**: Generates Mermaid call graphs automatically
+- **📊 Visual Diagrams**: Generates Mermaid call graphs automatically via CodeFlow
 - **📝 Multiple Output Formats**: Markdown and HTML with customizable templates
 - **⚡ Fast & Efficient**: Powered by CodeFlow's vector store and ChromaDB
-- **🔧 Developer-Friendly**: Rich CLI interface with progress indicators
+- **� Rich Context**: Automatically includes surrounding file content (±100 lines) for better understanding
+- **🎯 Project-Aware**: Reads AGENTS.md or README.md for project-level context
+- **🛡️ Grounded Documentation**: Strict instructions prevent LLM hallucinations
+- **�🔧 Developer-Friendly**:- **Rich CLI**: Beautiful terminal output with spinners and progress bars.
+- **Jinja2 Templating**: Customizable output formats using standard Jinja2 templates.
+- **Robust Configuration**: Type-safe configuration management via Pydantic.
 - **🛡️ Robust Error Handling**: Graceful degradation and comprehensive logging
 - **🔓 Open Source**: Full transparency with MIT license and community governance
 - **🏗️ Platform Agnostic**: Works with any editor, terminal, or CI/CD pipeline
@@ -31,10 +36,21 @@ Built on the same open foundation that powers leading AI development tools, DevG
 
 - **Python 3.10+**
 - **uv** package manager (recommended) or pip
-- **CodeFlow MCP server** running
+- **CodeFlow MCP server** (MUST be installed first from GitHub)
 - **OpenAI API key** (for LLM generation)
 
-### Installation
+### ⚠️ Install CodeFlow MCP First
+
+**CodeFlow must be installed from GitHub before using DevGuides:**
+
+```bash
+# Install CodeFlow from GitHub (REQUIRED - no PyPI package yet)
+git clone https://github.com/mrorigo/code-flow-mcp.git
+cd code-flow-mcp
+pip install -e .
+```
+
+### Install DevGuides
 
 ```bash
 # Install using uv (recommended)
@@ -42,7 +58,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv add devguides
 
 # Or install from source
-git clone https://github.com/devguides/devguides.git
+git clone https://github.com/mrorigo/devguides.git
 cd devguides
 uv sync
 uv pip install -e .
@@ -63,6 +79,9 @@ devguides generate "API endpoints" --level concise
 # Generate HTML output with custom template
 devguides generate "database models" --format html --template default
 
+# Expand more files for richer context (default: 5)
+devguides generate "authentication flow" --max-files 10
+
 # Save to specific file
 devguides generate "error handling patterns" --output my-guide.md
 ```
@@ -71,13 +90,13 @@ devguides generate "error handling patterns" --output my-guide.md
 
 ### Open Foundation
 
-Like leading AI development platforms, DevGuides leverages:
+DevGuides leverages CodeFlow's comprehensive analysis capabilities:
 
-- **🔍 Semantic Code Analysis**: ChromaDB vector search for understanding code relationships
+- **🔍 Semantic Code Analysis**: CodeFlow's ChromaDB vector search for understanding code relationships
 - **🤖 LLM Integration**: AI-powered documentation synthesis with support for OpenAI, Anthropic, and local models
-- **🔗 MCP Protocol**: Model Context Protocol for extensible agent workflows
-- **📊 Hierarchical Mapping**: Mermaid call graphs and dependency visualization
-- **🎯 Natural Language Queries**: Ask "Explain authentication flow" and get comprehensive docs
+- **🔗 MCP Protocol**: Model Context Protocol integration with CodeFlow for extensible agent workflows
+- **📊 Hierarchical Mapping**: Mermaid call graphs generated through CodeFlow's analysis
+- **🎯 Natural Language Queries**: CodeFlow enables asking "Explain authentication flow" and getting comprehensive docs
 
 ### Architecture
 
@@ -93,6 +112,8 @@ Like leading AI development platforms, DevGuides leverages:
                         └─────────────────┘
 ```
 
+**⚠️ Critical Dependency**: DevGuides requires CodeFlow MCP server to be installed and configured (DevGuides will start it automatically).
+
 ### Component Details
 
 - **CLI Interface**: Click-based command-line interface with Rich UI
@@ -100,8 +121,96 @@ Like leading AI development platforms, DevGuides leverages:
 - **LLM Handler**: Async OpenAI integration with retry logic
 - **Generation Engine**: 9-step documentation pipeline
 - **Template System**: Flexible Markdown/HTML template engine
+- **CodeFlow Integration**: Semantic analysis and code relationship mapping
 
 ## 📋 Configuration
+
+DevGuides uses two configuration files:
+
+1. **`codeflow.config.yaml`** - Configures CodeFlow MCP server (what code to analyze)
+2. **`.devguides.yaml`** - Configures DevGuides itself (how to generate docs)
+
+### 1. CodeFlow Configuration (`codeflow.config.yaml`)
+
+This tells CodeFlow which directories to analyze and how to store the vector embeddings.
+
+**Example** (see [`codeflow.config.yaml`](./codeflow.config.yaml) in this repo):
+
+```yaml
+# Directories to analyze
+watch_directories: ["devguides"]
+
+# Patterns to ignore
+ignored_patterns: ["venv", "**/__pycache__", ".git"]
+
+# Where to store vector embeddings
+chromadb_path: "./code_vectors_chroma"
+
+# Analysis settings
+max_graph_depth: 3
+embedding_model: "all-MiniLM-L6-v2"
+cleanup_interval_minutes: 30
+```
+
+**📖 Full CodeFlow documentation**: See the [CodeFlow repository](https://github.com/mrorigo/code-flow-mcp) for all configuration options.
+
+### 2. DevGuides Configuration (`.devguides.yaml`)
+
+This configures how DevGuides connects to CodeFlow and generates documentation.
+
+**Example** (see [`.devguides.yaml`](./.devguides.yaml) in this repo):
+
+```yaml
+# Server: How to connect to CodeFlow MCP
+server:
+  command: "/path/to/code_flow_graph_mcp_server"
+  args: ["--config", "codeflow.config.yaml"]
+  working_directory: "/path/to/your/project"
+  timeout: 60
+
+# LLM: Which AI model to use
+llm:
+  provider: "openai"
+  model: "gpt-4"
+  # Use environment variable for API key (recommended)
+  # api_key: "sk-..."  # NOT recommended - use env var instead
+  base_url: "https://api.openai.com/v1"  # Optional: for OpenRouter, etc.
+  max_tokens: 2000
+  temperature: 0.3
+
+# Output: Where and how to save documentation
+output:
+  format: "markdown"  # or "html"
+  include_diagrams: true
+  output_directory: "./docs"
+
+# Generation: Documentation generation settings
+generation:
+  detail_level: "comprehensive"  # or "concise"
+  max_results: 10  # Number of code snippets to analyze
+  max_files: 5     # Number of files to expand with full context
+  timeout: 60
+```
+
+**💡 Tips**:
+- Use environment variables for API keys (see below)
+- Point `server.command` to your CodeFlow installation
+- Reference your `codeflow.config.yaml` in `server.args`
+
+
+### 3. Project Context (AGENTS.md)
+
+DevGuides automatically reads project-level context from `AGENTS.md` (or falls back to `README.md`) to help the LLM understand your codebase architecture and generate more accurate documentation.
+
+**📖 Learn more about AGENTS.md**: Visit [https://agents.md/](https://agents.md/) for the specification and best practices.
+
+**How it works**:
+- Place an `AGENTS.md` file in your project root
+- DevGuides automatically includes it as context for the LLM
+- This prevents hallucinations and ensures documentation is grounded in your actual architecture
+- Falls back to `README.md` if `AGENTS.md` doesn't exist
+
+
 
 ### Environment Variables
 
@@ -116,77 +225,57 @@ export DEVGUIDES_OUTPUT_DIRECTORY="./docs"
 export DEVGUIDES_LOG_LEVEL="INFO"
 ```
 
-### Configuration File
+## 🛠️ CodeFlow Integration Setup
 
-Create `.devguides.yaml` in your project root:
+**⚠️ Essential Setup**: DevGuides requires CodeFlow MCP server to be installed and configured (DevGuides will start it automatically).
 
-```yaml
-server:
-  command: "python"
-  args: ["-m", "code_flow_graph.mcp_server"]
-  timeout: 30
-
-llm:
-  provider: "openai"
-  model: "gpt-4"
-  api_key: "your-openai-api-key"
-  base_url: "https://api.openai.com/v1"  # Optional: custom OpenAI-compatible endpoint
-  max_tokens: 2000
-  temperature: 0.3
-
-output:
-  format: "markdown"  # or "html"
-  include_diagrams: true
-  template: "default"
-  output_directory: "./docs"
-
-generation:
-  detail_level: "comprehensive"
-  include_examples: true
-  max_results: 10
-  timeout: 60
-```
-
-### User Configuration
-
-Create `~/.config/devguides/config.yaml` for user-wide settings:
-
-```yaml
-llm:
-  api_key: "your-openai-api-key"
-  model: "gpt-4"
-  base_url: "https://api.openai.com/v1"  # Optional: custom OpenAI-compatible endpoint
-
-output:
-  output_directory: "~/Documents/devguides-output"
-  format: "markdown"
-```
-
-## 🛠️ CodeFlow Integration
-
-DevGuides requires CodeFlow MCP server to be running. Set up CodeFlow:
+### CodeFlow Installation & Configuration
 
 ```bash
-# Install CodeFlow
-pip install code-flow-graph
+# Install CodeFlow from GitHub (REQUIRED - no PyPI package yet)
+git clone https://github.com/mrorigo/code-flow-mcp.git
+cd code-flow-mcp
+pip install -e .
 
-# Start MCP server
-python -m code_flow_graph.mcp_server
-
-# Or specify custom server
-devguides server --server /path/to/codeflow/server
+# Optionally create a custom configuration
+mkdir -p ~/.config/codeflow
+cp config/default.yaml ~/.config/codeflow/custom.yaml
 ```
 
-### Testing CodeFlow Connection
+### Automatic Server Management
+
+**DevGuides automatically manages CodeFlow MCP server:**
+
+- **Starts Server**: DevGuides launches CodeFlow when needed using stdio transport
+- **Manages Connection**: Handles connection lifecycle via `mcp[cli]` SDK
+- **Cleans Up**: Automatically terminates server when done
+- **Error Handling**: Robust retry logic and graceful degradation
+
+### Testing Integration
 
 ```bash
-# Test MCP server connectivity
-devguides server
+# Test that CodeFlow is properly installed
+python -m code_flow_graph.cli.code_flow_graph --help
 
-# Should output: ✓ Successfully connected to CodeFlow MCP server
+# Test DevGuides with CodeFlow integration
+devguides generate "test query" --verbose
+```
+
+### Custom CodeFlow Configuration (Optional)
+
+If you have a custom CodeFlow configuration:
+
+```yaml
+# ~/.config/codeflow/custom.yaml
+watch_directories: ["src", "app"]  # Directories to monitor
+ignored_patterns: ["venv", "**/__pycache__"]  # Patterns to ignore
+chromadb_path: "./code_vectors_chroma"  # Vector store location
+max_graph_depth: 3  # Maximum graph traversal depth
 ```
 
 ## 📖 Usage Examples
+
+**⚠️ Prerequisites**: DevGuides requires CodeFlow MCP to be installed (DevGuides will start it automatically).
 
 ### 1. Project Onboarding
 
@@ -200,7 +289,7 @@ devguides generate "main application setup and architecture" \
 ### 2. Feature Documentation
 
 ```bash
-# Document payment processing flow
+# Document payment processing flow using CodeFlow's semantic analysis
 devguides generate "payment processing flow and error handling" \
   --level comprehensive \
   --template default
@@ -209,7 +298,7 @@ devguides generate "payment processing flow and error handling" \
 ### 3. API Documentation
 
 ```bash
-# Generate API endpoint documentation
+# Generate API endpoint documentation with CodeFlow call graphs
 devguides generate "all REST API endpoints and their purposes" \
   --level comprehensive \
   --format html \
@@ -219,7 +308,7 @@ devguides generate "all REST API endpoints and their purposes" \
 ### 4. Security Analysis
 
 ```bash
-# Document authentication and authorization
+# Document authentication using CodeFlow's analysis capabilities
 devguides generate "authentication and authorization mechanisms" \
   --level comprehensive \
   --include-diagrams
@@ -228,10 +317,20 @@ devguides generate "authentication and authorization mechanisms" \
 ### 5. Concise Overview
 
 ```bash
-# Quick overview for code review
+# Quick overview using CodeFlow's vector search
 devguides generate "database connection patterns" \
   --level concise \
   --output quick-ref.md
+```
+
+### 6. Advanced Integration
+
+```bash
+# Test CodeFlow directly first (optional)
+python -m code_flow_graph.cli.code_flow_graph . --output analysis.json
+
+# Then generate documentation using DevGuides
+devguides generate "core application logic" --level comprehensive
 ```
 
 ## 📊 Output Examples
@@ -365,15 +464,22 @@ uv run pytest tests/integration/
 
 ### Common Issues
 
-#### 1. MCP Server Connection Failed
+#### 1. ⚠️ CodeFlow MCP Not Installed
+
+**Most Common Issue**: DevGuides requires CodeFlow MCP to be installed from GitHub.
 
 ```bash
-# Error: Failed to connect to CodeFlow MCP server
-# Solution: Ensure CodeFlow server is running
-python -m code_flow_graph.mcp_server
+# Error: CodeFlow not found or import error
+# Solution: Install CodeFlow from GitHub
+git clone https://github.com/mrorigo/code-flow-mcp.git
+cd code-flow-mcp
+pip install -e .
 
-# Or check server command
-devguides server --verbose
+# Verify installation
+python -m code_flow_graph.cli.code_flow_graph --help
+
+# Test with DevGuides
+devguides generate "test query" --verbose
 ```
 
 #### 2. OpenAI API Key Missing
@@ -383,21 +489,44 @@ devguides server --verbose
 # Solution: Set environment variable
 export DEVGUIDES_LLM_API_KEY="your-api-key"
 
-# Or add to config file
+# Or add to config file (not recommended)
 echo 'llm:
   api_key: "your-api-key"' >> .devguides.yaml
 ```
 
-#### 3. No Code Found for Query
+#### 3. CodeFlow Installation Issues
+
+```bash
+# Error: CodeFlow dependencies missing
+# Solution: Ensure all CodeFlow dependencies are installed
+cd code-flow-mcp
+pip install chromadb sentence-transformers mcp[cli] pyyaml watchdog pydantic
+
+# Verify Python path is set correctly
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+```
+
+#### 4. MCP Connection Timeout
+
+```bash
+# Error: MCP session initialization times out
+# Solution: Increase timeout or check CodeFlow installation
+devguides generate "query" --timeout 180 --verbose
+
+# Or verify CodeFlow works standalone
+python -m code_flow_graph.cli.code_flow_graph . --query "test"
+```
+
+#### 5. No Code Found for Query
 
 ```bash
 # Error: No relevant code found for query
-# Solution: Try broader queries or check CodeFlow analysis
+# Solution: Try broader queries or verify CodeFlow analysis
 devguides generate "functions"  # Broader query
-devguides server --test  # Test CodeFlow connectivity
+python -m code_flow_graph.cli.code_flow_graph . --output test.json  # Test CodeFlow directly
 ```
 
-#### 4. Generation Timeout
+#### 6. Generation Timeout
 
 ```bash
 # Error: Generation timed out
@@ -463,7 +592,7 @@ We welcome contributions! DevGuides is built by the community, for the community
 
 ```bash
 # Clone repository
-git clone https://github.com/devguides/devguides.git
+git clone https://github.com/mrorigo/devguides.git
 cd devguides
 
 # Install development dependencies
@@ -493,20 +622,24 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-Built on the same open foundation as leading AI development tools:
-- [CodeFlow](https://github.com/mrorigo/code-flow-mcp) for semantic code analysis
-- [Model Context Protocol](https://github.com/modelcontextprotocol) for open communication standards
-- [OpenAI](https://openai.com/) for LLM capabilities
-- [Rich](https://github.com/Textualize/rich) for beautiful terminal output
-- [Mermaid](https://mermaid-js.github.io/) for diagram generation
+**Built on CodeFlow's Foundation**: DevGuides leverages the powerful analysis capabilities of CodeFlow and other open-source tools:
+
+- **[CodeFlow](https://github.com/mrorigo/code-flow-mcp)** - Essential MCP integration for semantic code analysis (MUST be installed from GitHub)
+- **[Model Context Protocol](https://github.com/modelcontextprotocol)** - Open communication standards for agent integration
+- **[ChromaDB](https://www.trychroma.com/)** - Vector database for semantic search (via CodeFlow)
+- **[OpenAI](https://openai.com/)** - LLM capabilities for intelligent documentation synthesis
+- **[Rich](https://github.com/Textualize/rich)** - Beautiful terminal output formatting
+- **[Mermaid](https://mermaid-js.github.io/)** - Call graph diagram generation (via CodeFlow)
+
+**Special Thanks**: CodeFlow MCP provides the semantic analysis foundation that enables DevGuides' intelligent code understanding.
 
 ## 📞 Support
 
 - 📖 [Documentation](https://devguides.readthedocs.io/)
-- 🐛 [Issue Tracker](https://github.com/devguides/devguides/issues)
-- 💬 [Discussions](https://github.com/devguides/devguides/discussions)
+- 🐛 [Issue Tracker](https://github.com/mrorigo/devguides/issues)
+- 💬 [Discussions](https://github.com/mrorigo/devguides/discussions)
 - 📧 [Email Support](mailto:support@devguides.ai)
 
 ---
 
-**Made with ❤️ for the developer community | Choose transparency, extensibility, and community ownership.**
+**Made with ❤️ for the developer community | Powered by CodeFlow MCP integration | Choose transparency, extensibility, and community ownership.**

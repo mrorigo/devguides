@@ -313,9 +313,10 @@ class TestDocumentationEngine:
     
     def test_apply_template_markdown(self, engine):
         """Test markdown template application."""
-        llm_content = "# Test Documentation\\n\\nThis is test content."
-        mermaid_diagram = "graph TD\\n    A --> B"
+        llm_content = "# Test Documentation\n\nThis is test content."
+        mermaid_diagram = "graph TD\n    A --> B"
         
+        # This now uses Jinja2, so we expect the full template output
         result = engine._apply_template(
             llm_content, 
             mermaid_diagram, 
@@ -329,11 +330,12 @@ class TestDocumentationEngine:
         assert "This is test content" in result
         assert "Call Flow" in result
         assert "graph TD" in result
+        assert "Metadata" in result  # Check for template specific section
     
     def test_apply_template_html(self, engine):
         """Test HTML template application."""
-        llm_content = "# Test Documentation\\n\\nThis is test content."
-        mermaid_diagram = "graph TD\\n    A --> B"
+        llm_content = "# Test Documentation\n\nThis is test content."
+        mermaid_diagram = "graph TD\n    A --> B"
         
         result = engine._apply_template(
             llm_content, 

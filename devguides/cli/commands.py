@@ -76,10 +76,12 @@ def cli(ctx, config, verbose, quiet):
               help="Skip Mermaid diagrams")
 @click.option("--max-results", default=10, 
               help="Maximum number of search results to analyze")
+@click.option("--max-files", default=5,
+              help="Maximum number of files to expand with surrounding context")
 @click.option("--timeout", type=int, 
               help="Generation timeout in seconds")
 @click.pass_context
-def generate(ctx, query, level, format, output, template, no_diagrams, max_results, timeout):
+def generate(ctx, query, level, format, output, template, no_diagrams, max_results, max_files, timeout):
     """Generate documentation for a given query."""
     config = ctx.obj['config']
     
@@ -107,6 +109,7 @@ def generate(ctx, query, level, format, output, template, no_diagrams, max_resul
                 output_format=format,
                 include_diagrams=not no_diagrams,
                 max_results=max_results,
+                max_files=max_files,
                 template=template,
                 timeout=timeout or config.generation.timeout
             )

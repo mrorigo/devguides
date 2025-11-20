@@ -6,7 +6,7 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock
 import os
 
 from devguides.core.llm_handler import (
-    LLMProvider, OpenAIProvider, LocalLLMProvider, LLMHandler
+    LLMProvider, OpenAIProvider, LLMHandler
 )
 
 class TestLLMProvider:
@@ -139,28 +139,7 @@ class TestOpenAIProvider:
                 result = await openai_provider.generate("test prompt")
                 assert result == ""  # Error handling returns empty string
 
-class TestLocalLLMProvider:
-    """Test local LLM provider."""
-    
-    def test_initialization(self):
-        """Test local LLM provider initialization."""
-        provider = LocalLLMProvider(model_name="llama2")
-        assert provider.model_name == "llama2"
-    
-    def test_is_available(self):
-        """Test local LLM provider availability."""
-        provider = LocalLLMProvider()
-        # Currently returns False as it's not implemented
-        assert provider.is_available() is False
-    
-    @pytest.mark.asyncio
-    async def test_generate_not_implemented(self):
-        """Test that generation raises RuntimeError for not implemented."""
-        provider = LocalLLMProvider()
-        
-        # The current implementation raises RuntimeError instead of NotImplementedError
-        with pytest.raises(RuntimeError, match="Local LLM provider not available"):
-            await provider.generate("test prompt")
+
 
 class TestLLMHandler:
     """Test LLM handler."""
@@ -176,15 +155,7 @@ class TestLLMHandler:
             "temperature": 0.3
         }
     
-    @pytest.fixture
-    def local_config(self):
-        """Local LLM configuration for testing."""
-        return {
-            "provider": "local",
-            "model_name": "llama2",
-            "max_tokens": 2000,
-            "temperature": 0.3
-        }
+
     
     def test_initialization_openai(self, openai_config):
         """Test LLM handler initialization with OpenAI."""
@@ -200,15 +171,7 @@ class TestLLMHandler:
             
             assert handler.config == openai_config
     
-    def test_initialization_local(self, local_config):
-        """Test LLM handler initialization with local LLM."""
-        with patch('devguides.core.llm_handler.LocalLLMProvider') as MockProvider:
-            handler = LLMHandler(local_config)
-            
-            # Verify local LLM provider was created
-            MockProvider.assert_called_once_with(model_name="llama2")
-            
-            assert handler.config == local_config
+
     
     def test_initialization_invalid_provider(self):
         """Test initialization with invalid provider."""
@@ -390,58 +353,7 @@ class TestLLMHandler:
             # Should return error message instead of raising
             assert "Error generating documentation" in result
     
-    @pytest.mark.asyncio
-    async def test_generate_summary(self):
-        """Test summary generation."""
-        config = {
-            "provider": "openai",
-            "model": "gpt-4",
-            "api_key": "test-key"
-        }
-        
-        with patch('devguides.core.llm_handler.OpenAIProvider') as MockProvider:
-            mock_provider = Mock()
-            mock_provider.generate = AsyncMock(return_value="Summary text")
-            MockProvider.return_value = mock_provider
-            
-            handler = LLMHandler(config)
-            
-            result = await handler.generate_summary("test code context", max_length=100)
-            
-            assert result == "Summary text"
-            
-            # Verify provider was called with summary prompt
-            call_args = mock_provider.generate.call_args
-            prompt = call_args[0][0]
-            assert "brief summary" in prompt
-            assert "test code context" in prompt
-    
-    @pytest.mark.asyncio
-    async def test_explain_code_snippet(self):
-        """Test code snippet explanation."""
-        config = {
-            "provider": "openai", 
-            "model": "gpt-4",
-            "api_key": "test-key"
-        }
-        
-        with patch('devguides.core.llm_handler.OpenAIProvider') as MockProvider:
-            mock_provider = Mock()
-            mock_provider.generate = AsyncMock(return_value="Explanation text")
-            MockProvider.return_value = mock_provider
-            
-            handler = LLMHandler(config)
-            
-            code_snippet = "def hello(): pass"
-            result = await handler.explain_code_snippet(code_snippet, "test context")
-            
-            assert result == "Explanation text"
-            
-            # Verify provider was called with explanation prompt
-            call_args = mock_provider.generate.call_args
-            prompt = call_args[0][0]
-            assert "hello" in prompt  # Code should be in prompt
-            assert "test context" in prompt
+
     
     def test_provider_available(self):
         """Test provider availability checking."""
@@ -481,9 +393,9 @@ class TestLLMHandler:
     
     def test_prompt_building(self):
         """Test prompt building logic."""
-        config = {"provider": "local"}  # Use local to avoid API calls
+        config = {"provider": "openai", "api_key": "test"}
         
-        with patch('devguides.core.llm_handler.LocalLLMProvider') as MockProvider:
+        with patch('devguides.core.llm_handler.OpenAIProvider') as MockProvider:
             MockProvider.return_value = Mock()  # Don't call generate
             
             handler = LLMHandler(config)

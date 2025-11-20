@@ -177,7 +177,31 @@ class LLMHandler:
 
 Context from CodeFlow analysis:
 {json.dumps(context, indent=2)}
+"""
+        
+        # Add project context if available
+        if context.get("project_context"):
+            base_prompt += f"""
 
+Project Context (from AGENTS.md/README.md):
+{context['project_context']}
+"""
+
+        # Add expanded file content if available
+        if context.get("expanded_files"):
+            base_prompt += """
+
+Expanded File Content (surrounding code context):
+"""
+            for filename, content in context["expanded_files"].items():
+                base_prompt += f"""
+File: {filename}
+--------------------------------------------------
+{content}
+--------------------------------------------------
+"""
+
+        base_prompt += f"""
 Please generate {'comprehensive' if detail_level == 'comprehensive' else 'concise'} documentation that includes:
 
 1. **Overview** - What this code does at a high level
@@ -195,6 +219,13 @@ NOTE: A Mermaid call flow diagram has been automatically generated and will be i
 """
         
         base_prompt += """
+
+CRITICAL INSTRUCTIONS:
+- Do NOT infer or guess functionality that is not explicitly present in the provided context.
+- If the context is insufficient to explain a feature, state that the information is missing.
+- Be truthful and grounded in the actual codebase.
+- Do not make up usage examples if they are not supported by the code.
+- If the search results are empty or irrelevant, explicitly state that no relevant code was found.
 
 Focus on making this documentation useful for developers who need to understand or work with this code. Use technical but accessible language. Include relevant code snippets and explain the reasoning behind the implementation."""
 
